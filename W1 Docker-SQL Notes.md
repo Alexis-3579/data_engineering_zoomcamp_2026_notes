@@ -188,7 +188,23 @@ docker build -t test:pandas .
 docker run -it test:pandas 12 #random number
 ```
 
+
+
 ### Using Docker to Run Postgres 
+To run PostgreSQL in a contianer: 
+
+```
+docker run -it --rm \
+  -e POSTGRES_USER="root" \
+  -e POSTGRES_PASSWORD="root" \
+  -e POSTGRES_DB="ny_taxi" \
+  -v ny_taxi_postgres_data:/var/lib/postgresql \
+  -p 5432:5432 \
+  postgres:18
+```
+**Explanation**
+- `-e` (e stands for environment): sets environment variables (user, password, database name)
+- `-v ny_taxi_postgres_data:/var/lib/postgresql` creates a named volume
 
 
 
