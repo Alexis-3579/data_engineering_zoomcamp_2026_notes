@@ -3,6 +3,7 @@ To replace the default long prompt with a >, we can type ` echo 'PS1="> "' > ~/.
 
 ### What is Docker? 
 - Good article:  https://www.geeksforgeeks.org/devops/introduction-to-docker/
+
 Motivation for docker: before docker, deploying applications across environments was difficult, often encountering 'it works on my machine' problems due to dependencies, configs and OS-variations. 
 How docker solves this problem: 
 - Docker standardizes the runtime environment by bundling everything (app + dependencies) into a single, immutable container.
@@ -191,6 +192,8 @@ docker run -it test:pandas 12 #random number
 
 
 ### Using Docker to Run Postgres 
+Here, a folder named `ny_taxi_postgres_data` is created for Postgres to store data in. 
+
 To run PostgreSQL in a contianer: 
 
 ```
@@ -205,6 +208,56 @@ docker run -it --rm \
 **Explanation**
 - `-e` (e stands for environment): sets environment variables (user, password, database name)
 - `-v ny_taxi_postgres_data:/var/lib/postgresql` creates a named volume
+  - This is called **volume mount** -- it is used to store data outside a container's ephemeral filesystem, enabling persistent storage, data sharing between containers, and improved I/O performance.
+  - It maps a directory on the host machine to a directory inside the container, ensuring data persists even if the container is deleted.
+  - It's the same idea as volume mapping as previously described. 
+  - The general syntax is `:v <source>:<destination>`
+- postgres:18 uses PostgreSQL version 18
+
+
+
+
+### Accessing Postgres with pgcli
+To install pgcli: 
+
+```
+uv add --dev pgcli
+```
+- Note:
+  - The --dev flag is used to tell uv include pgcli in the dev-dependencies, not in the main dependencies needed for production.
+  - It will be added to the [dependency-groups] section of pyproject.toml instead of the main dependencies section.
+
+To connect the pgcli to Postgres, run the following and enter the password:
+```
+uv run pgcli -h localhost -p 5432 -u root -d ny_taxi
+```
+
+
+
+### Basic SQL Commands (for demo purposes) 
+```
+-- List tables
+\dt
+
+-- Create a test table
+CREATE TABLE test (id INTEGER, name VARCHAR(50));
+
+-- Insert data
+INSERT INTO test VALUES (1, 'Hello Docker');
+
+-- Query data
+SELECT * FROM test;
+
+-- Exit
+\q
+```
+
+
+### Using Jupyter Notebook 
+
+```
+!uv add sqlalchemy
+```
 
 
 
