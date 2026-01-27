@@ -200,15 +200,145 @@ uv run python ingest_data.py \
   --target-table=yellow_taxi_trips
 ```
 
+
+### Dockerizing the Ingestion Script
+*Note*: Need to change the ENTRYPOINT in dockerfile slightly since the script is renamed ingest_data.py
+
 To dockerize:
 ```
  docker build -t taxi_ingest:v001 .
 ```
+To run the container:
+```
+docker run -it \
+  taxi_ingest:v001 \
+    --pg-user=root \
+    --pg-pass=root \
+    --pg-host=localhost \
+    --pg-port=5432 \
+    --pg-db=ny_taxi \
+    --target-table=yellow_taxi_trips
+```
+
+**Caveat**: The above will give an error -- Connection refused at localhost! 
+- The reason it’s happening now is that the Python script is now running inside a Docker container, but the database is in a different container.
+- When the code says localhost, the container looks inside itself for Postgres. Since Postgres isn't inside that specific container, it fails.
+- Solution: use **Docker network**.
 
 
+### Docker Network 
+To create a network, run in terminal: 
+```
+docker network create pg-network
+```
+
+Updated docker commands in the terminal 
+```
+# Postgres Image
+docker run -it --rm \
+  --network=pg-network\
+  --name pgdatabase \
+  -e POSTGRES_USER="root" \
+  -e POSTGRES_PASSWORD="root" \
+  -e POSTGRES_DB="ny_taxi" \
+  -v ny_taxi_postgres_data:/var/lib/postgresql \
+  -p 5432:5432 \
+  postgres:18
+
+# Taxi-ingest Image
+docker run -it \
+  --network=pg-network \
+  taxi_ingest:v001 \
+    --pg-user=root \
+    --pg-pass=root \
+    --pg-host=pgdatabase \
+    --pg-port=5432 \
+    --pg-db=ny_taxi \
+    --target-table=yellow_taxi_trips
+```
+*Note*: the pg-host has been changed to pgdatabase instead of *localhost*. 
+
+
+### Running pgAdmin 
+```
+docker run -it \
+  --network=pg-network\
+  -e PGADMIN_DEFAULT_EMAIL="admin@admin.com" \
+  -e PGADMIN_DEFAULT_PASSWORD="root" \
+  -v pgadmin_data:/var/lib/pgadmin \
+  -p 8085:80 \
+  dpage/pgadmin4
+```
+
+To access, enter `http://localhost:8085` on a browser:
+- Enter credentials
+- Right-click "Servers" → Register → Server
+- In the Connection tab:
+  - Host: pgdatabase (the container name)
+  - Enter the credentials as previously set up  
 
 
 <img width="1069" height="576" alt="image" src="https://github.com/user-attachments/assets/8e52e879-37c7-4e10-83d2-a60bf4529b9e" />
+
+
+### Docker Compose 
+Up until now, we have been manually typing long docker run commands for the Postgres database, pgAdmin UI, and the Python ingestion script. 
+Docker Compose allows us to define all those services, their networks, and their volumes in a single YAML file, so we can start the entire system with one command.
+
+Create a docker-compose.yml file in the directory (this will define all the images and containers we need to run)
+```
+services:
+  pgdatabase:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: "root"
+      POSTGRES_PASSWORD: "root"
+      POSTGRES_DB: "ny_taxi"
+    volumes:
+      - "ny_taxi_postgres_data:/var/lib/postgresql"
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@admin.com"
+      PGADMIN_DEFAULT_PASSWORD: "root"
+    volumes:
+      - "pgadmin_data:/var/lib/pgadmin"
+    ports:
+      - "8085:80"
+
+
+
+volumes:
+  ny_taxi_postgres_data:
+  pgadmin_data:
+```
+
+- Note: We don't have to specify a network because docker compose takes care of it: every single container (or "service", as the file states) will run within the same network and will be able to find each other according to their names (pgdatabase and pgadmin in this example).
+- To run docker-compose in the terminal (ensure first the previous containers have been deleted or stopped)
+  - `docker-compose up`
+
+If you want to re-run the dockerized ingest script when you run Postgres and pgAdmin with docker compose, you will have to find the name of the virtual network that Docker compose created for the containers.
+
+```
+# check the network link:
+docker network ls
+
+# it's pipeline_default (or similar based on directory name)
+# now run the script:
+docker run -it --rm\
+  --network=pipeline_default \
+  taxi_ingest:v001 \
+    --pg-user=root \
+    --pg-pass=root \
+    --pg-host=pgdatabase \
+    --pg-port=5432 \
+    --pg-db=ny_taxi \
+    --target-table=yellow_taxi_trips
+```
+
 
 
 
