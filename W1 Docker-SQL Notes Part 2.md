@@ -204,3 +204,12 @@ To dockerize:
 ```
  docker build -t taxi_ingest:v001 .
 ```
+
+
+
+
+<img width="1069" height="576" alt="image" src="https://github.com/user-attachments/assets/8e52e879-37c7-4e10-83d2-a60bf4529b9e" />
+
+
+
+
