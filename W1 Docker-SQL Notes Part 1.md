@@ -109,15 +109,19 @@ uv run file.py
 # Dockerfile
 FROM python:3.13.11-slim
 
-# set up our image by installing prerequisites; pandas in this case
+# 1. set up the working directory inside the container
+WORKDIR /code
+
+# 2. Copy only the dependency files first (better for caching)
+COPY pyproject.toml uv.lock ./
+
+# 3. set up our image by installing prerequisites; pandas in this case
 RUN pip install pandas pyarrow
 
-# set up the working directory inside the container
-WORKDIR /app
-# copy the script to the container. 1st name is source file, 2nd is destination
+# 4. copy the script to the container. 1st name is source file, 2nd is destination
 COPY pipeline.py pipeline.py
 
-# define what to do first when the container runs
+# 5. define what to do first when the container runs
 # in this example, we will just run the script
 ENTRYPOINT ["python", "pipeline.py"]
 
@@ -135,48 +139,45 @@ Explanation:
 **What about uv?**
 
 ```
-# Updated Dockerfile
+# Updated Dockerfile (+ install uv) 
 FROM python:3.13.11-slim
 
-WORKDIR /app
-
-COPY pipeline.py pipeline.py
-
-# Copy uv binary from official uv image (multi-stage build pattern)
+# 1. Install uv -- Copy uv binary from official uv image (multi-stage build pattern)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-#
-COPY pyproject.toml .python-version uv.lock ./
+# 2. set up the working directory inside the container
+WORKDIR /code
 
-# Tells uv to install dependencies exactly as they are defined in the uv lock file (the python environment set up previously)  
-RUN uv sync --locked
+# 3. Copy only the dependency files first (better for caching)
+COPY pyproject.toml uv.lock ./
 
+# 4. set up our image by installing prerequisites; pandas in this case
 RUN pip install pandas pyarrow
 
+# 5. copy the script to the container. 1st name is source file, 2nd is destination
+COPY pipeline.py pipeline.py
+
+# define what to do first when the container runs
+# in this example, we will just run the script
 ENTRYPOINT ["uv", "run", "python", "pipeline.py"]
 
 ```
 Another way of doing this if we don't want to include "uv" and "run" in the ENTRYPOINT is:
 ```
-# Updated Dockerfile
+# Updated final version Dockerfile
 FROM python:3.13.11-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-WORKDIR /app
-
-# Add virtual environment to PATH so we can use installed packages
+WORKDIR /code
 ENV PATH="/code/.venv/bin:$PATH"
+
+COPY pyproject.toml .python-version uv.lock ./
+RUN uv sync --locked
 
 COPY pipeline.py pipeline.py
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+ENTRYPOINT ["python", "ingest_data.py"]
 
-COPY pyproject.toml .python-version uv.lock ./
-
-RUN uv sync --locked
-
-RUN pip install pandas pyarrow
-
-ENTRYPOINT ["python", "pipeline.py"]
 ```
 
 **Build and Run the Image**
