@@ -105,3 +105,102 @@ Given there's 1369765 rows of data, we don't want to ingest the data all at once
 ```
 uv run jupyter nbconvert --to=script Notebook.ipynb
 ```
+
+Cleaning up and optimizing, using click to configure the parameters, the complete ingestion script is:
+```
+#!/usr/bin/env python
+# coding: utf-8
+
+
+import pandas as pd
+from tqdm.auto import tqdm 
+from sqlalchemy import create_engine
+import click
+
+
+# Read a sample of the data
+prefix = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow/'
+dtype = {
+    "VendorID": "Int64",
+    "passenger_count": "Int64",
+    "trip_distance": "float64",
+    "RatecodeID": "Int64",
+    "store_and_fwd_flag": "string",
+    "PULocationID": "Int64",
+    "DOLocationID": "Int64",
+    "payment_type": "Int64",
+    "fare_amount": "float64",
+    "extra": "float64",
+    "mta_tax": "float64",
+    "tip_amount": "float64",
+    "tolls_amount": "float64",
+    "improvement_surcharge": "float64",
+    "total_amount": "float64",
+    "congestion_surcharge": "float64"
+}
+
+parse_dates = [
+    "tpep_pickup_datetime",
+    "tpep_dropoff_datetime"
+]
+
+
+# Data Ingestion in Chunks 
+
+@click.command()
+@click.option('--year', type=int, default=2021, help='Year for the taxi data')
+@click.option('--month', type=int, default=1, help='Month for the taxi data')
+@click.option('--pg-user', default='root', help='PostgreSQL user')
+@click.option('--pg-pass', default='root', help='PostgreSQL password')
+@click.option('--pg-host', default='localhost', help='PostgreSQL host')
+@click.option('--pg-port', type=int, default=5432, help='PostgreSQL port')
+@click.option('--pg-db', default='ny_taxi', help='PostgreSQL database name')
+@click.option('--target-table', default='yellow_taxi_data', help='Target table name')
+@click.option('--chunksize', type=int, default=100000, help='Chunk size for reading CSV')
+def run(year, month, pg_user, pg_pass, pg_host, pg_port, pg_db, target_table, chunksize):
+
+    # create engine for sqlalchemy 
+    engine = create_engine(f'postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}')
+
+
+    # read the csv and define the iterator 
+    df_iter = pd.read_csv(
+        prefix + f'yellow_tripdata_{year}-{month:02d}.csv.gz',
+        dtype=dtype,
+        parse_dates=parse_dates,
+        iterator=True,
+        chunksize=chunksize
+    )
+
+    first = True
+    for df_chunk in tqdm(df_iter):
+        if first:
+            df_chunk.head(0).to_sql(name=target_table,
+                                    con=engine,
+                                    if_exists='replace'
+                                    )
+            first = False 
+        df_chunk.to_sql(name='yellow_taxi_data', con=engine, if_exists='append')
+        print(len(df_chunk))
+
+
+if __name__ == "__main__": 
+    run()
+
+```
+
+Example of usage of this script:
+```
+uv run python ingest_data.py \
+  --pg-user=root \
+  --pg-pass=root \
+  --pg-host=localhost \
+  --pg-port=5432 \
+  --pg-db=ny_taxi \
+  --target-table=yellow_taxi_trips
+```
+
+To dockerize:
+```
+ docker build -t taxi_ingest:v001 .
+```
