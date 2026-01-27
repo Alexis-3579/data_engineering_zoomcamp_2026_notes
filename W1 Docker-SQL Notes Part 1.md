@@ -253,13 +253,6 @@ SELECT * FROM test;
 ```
 
 
-### Using Jupyter Notebook 
-
-```
-!uv add sqlalchemy
-```
-
-
 
 
 
